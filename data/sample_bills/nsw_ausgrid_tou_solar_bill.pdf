@@ -1,0 +1,105 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 1291 >>
+stream
+BT
+/F1 10 Tf
+45 790 Td
+13 TL
+(TAX INVOICE - RESIDENTIAL ELECTRICITY STATEMENT) Tj
+T*
+(Retailer: AGL) Tj
+T*
+(Plan Name: AGL Essentials Variable TOU) Tj
+T*
+(Customer Name: Alex Citizen) Tj
+T*
+(Account Number: 492018472) Tj
+T*
+(NMI: 4102938475) Tj
+T*
+(Supply Address: 88 George St, Sydney NSW 2000) Tj
+T*
+(Suburb: Sydney) Tj
+T*
+(Postcode: 2000) Tj
+T*
+(Distributor Network: Ausgrid) Tj
+T*
+(Fuel Type: ELECTRICITY) Tj
+T*
+(Tariff Type: TIME_OF_USE) Tj
+T*
+(Billing Period: 90 days \(01 Jul 2026 to 28 Sep 2026\)) Tj
+T*
+(------------------------------------------------------------) Tj
+T*
+(METER USAGE SUMMARY \(90 DAYS\)) Tj
+T*
+(Total Electricity Usage: 1350.0 kWh) Tj
+T*
+(Peak Usage: 420.0 kWh) Tj
+T*
+(Shoulder Usage: 310.0 kWh) Tj
+T*
+(Off-Peak Usage: 620.0 kWh) Tj
+T*
+(Controlled Load Usage: 220.0 kWh) Tj
+T*
+(Solar Export: 680.0 kWh) Tj
+T*
+(Solar System Capacity: 6.6 kW) Tj
+T*
+(------------------------------------------------------------) Tj
+T*
+(TARIFF RATES AND CHARGES \(GST INCLUSIVE\)) Tj
+T*
+(Daily Supply Charge: 118.80 c/day) Tj
+T*
+(Peak Rate: 44.50 c/kWh) Tj
+T*
+(Shoulder Rate: 30.20 c/kWh) Tj
+T*
+(Off-Peak Rate: 23.10 c/kWh) Tj
+T*
+(Controlled Load Rate: 19.80 c/kWh) Tj
+T*
+(Solar Feed-in Tariff: 5.00 c/kWh) Tj
+T*
+(Usage Discount: 0.0 %) Tj
+T*
+(Total Bill Amount Due: $542.65) Tj
+T*
+ET
+endstream
+endobj
+6 0 obj
+<< /Title (AGL NSW Ausgrid TOU Solar Bill) >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000000317 00000 n 
+0000001660 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R /Info 6 0 R >>
+startxref
+1721
+%%EOF

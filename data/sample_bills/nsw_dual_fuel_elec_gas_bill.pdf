@@ -1,0 +1,109 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 1321 >>
+stream
+BT
+/F1 10 Tf
+45 790 Td
+13 TL
+(COMBINED DUAL-FUEL ENERGY STATEMENT \(NSW\)) Tj
+T*
+(Retailer: EnergyAustralia) Tj
+T*
+(Plan Name: Basic Home Dual Plan) Tj
+T*
+(Customer Name: Jordan Lee) Tj
+T*
+(Account Number: 77419283) Tj
+T*
+(NMI: 4108877665) Tj
+T*
+(MIRN: 5209988776) Tj
+T*
+(Supply Address: 42 Victoria Ave, Chatswood NSW 2067) Tj
+T*
+(Suburb: Chatswood) Tj
+T*
+(Postcode: 2067) Tj
+T*
+(Distributor Network: Ausgrid) Tj
+T*
+(Fuel Type: DUAL) Tj
+T*
+(Tariff Type: TIME_OF_USE) Tj
+T*
+(Billing Period: 90 days) Tj
+T*
+(------------------------------------------------------------) Tj
+T*
+(ELECTRICITY SUMMARY \(AUSGRID\)) Tj
+T*
+(Total Electricity Usage: 1200.0 kWh) Tj
+T*
+(Peak Usage: 380.0 kWh) Tj
+T*
+(Shoulder Usage: 260.0 kWh) Tj
+T*
+(Off-Peak Usage: 560.0 kWh) Tj
+T*
+(Daily Supply Charge: 116.00 c/day) Tj
+T*
+(Peak Rate: 43.80 c/kWh) Tj
+T*
+(Shoulder Rate: 29.50 c/kWh) Tj
+T*
+(Off-Peak Rate: 22.80 c/kWh) Tj
+T*
+(------------------------------------------------------------) Tj
+T*
+(NATURAL GAS SUMMARY \(JEMENA GAS NSW\)) Tj
+T*
+(Gas Retailer: EnergyAustralia) Tj
+T*
+(Gas Plan: Basic Home Gas) Tj
+T*
+(Total Gas Usage: 5800.0 MJ) Tj
+T*
+(Gas Daily Supply Charge: 68.50 c/day) Tj
+T*
+(Gas Block 1 Rate: 3.95 c/MJ) Tj
+T*
+(Gas Block 1 Limit: 60.0 MJ/day) Tj
+T*
+(Gas Remainder Rate: 2.45 c/MJ) Tj
+T*
+(Total Bill Amount Due: $765.00) Tj
+T*
+ET
+endstream
+endobj
+6 0 obj
+<< /Title (EnergyAustralia NSW Dual Fuel Bill) >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000000317 00000 n 
+0000001690 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R /Info 6 0 R >>
+startxref
+1755
+%%EOF

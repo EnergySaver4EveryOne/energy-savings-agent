@@ -1,0 +1,85 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 869 >>
+stream
+BT
+/F1 10 Tf
+45 790 Td
+13 TL
+(RESIDENTIAL ELECTRICITY BILL) Tj
+T*
+(Retailer: Origin Energy) Tj
+T*
+(Plan Name: Origin Everyday Standing) Tj
+T*
+(Customer Name: Taylor Smith) Tj
+T*
+(Account Number: 88392011) Tj
+T*
+(NMI: 4310928374) Tj
+T*
+(Supply Address: 15 Church St, Parramatta NSW 2150) Tj
+T*
+(Suburb: Parramatta) Tj
+T*
+(Postcode: 2150) Tj
+T*
+(Distributor Network: Endeavour Energy) Tj
+T*
+(Fuel Type: ELECTRICITY) Tj
+T*
+(Tariff Type: SINGLE_RATE) Tj
+T*
+(Billing Period: 92 days) Tj
+T*
+(------------------------------------------------------------) Tj
+T*
+(USAGE AND RATES \(GST INCLUSIVE\)) Tj
+T*
+(Total Electricity Usage: 1480.0 kWh) Tj
+T*
+(Controlled Load Usage: 180.0 kWh) Tj
+T*
+(Daily Supply Charge: 112.50 c/day) Tj
+T*
+(Single Rate: 33.40 c/kWh) Tj
+T*
+(Controlled Load Rate: 19.50 c/kWh) Tj
+T*
+(Usage Discount: 0.0 %) Tj
+T*
+(Total Bill Amount Due: $632.90) Tj
+T*
+ET
+endstream
+endobj
+6 0 obj
+<< /Title (Origin NSW Endeavour Single Rate Bill) >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000000317 00000 n 
+0000001237 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R /Info 6 0 R >>
+startxref
+1305
+%%EOF
