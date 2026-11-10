@@ -286,8 +286,47 @@ class TestEnergySavingsAgent(unittest.TestCase):
         complex_plan = json.loads(json.dumps(base))
         complex_plan["electricityContract"]["tariffPeriod"][0]["timeOfUseRates"] = []
         self.assertIsNone(collector._normalise_cdr_plan_metadata(complex_plan, "https://example.com"))
-        gas = dict(base, fuelType="GAS")
-        self.assertIsNone(collector._normalise_cdr_plan_metadata(gas, "https://example.com"))
+        gas = dict(base, fuelType="GAS",
+                   gasContract=base["electricityContract"])
+        normalised_gas = collector._normalise_cdr_plan_metadata(gas, "https://example.com")
+        self.assertIsNotNone(normalised_gas)
+        self.assertEqual(normalised_gas.gas_block1_rate_cents_mj, Decimal("30.00"))
+        invalid_gas = dict(gas, gasContract={})
+        self.assertIsNone(collector._normalise_cdr_plan_metadata(invalid_gas, "https://example.com"))
+
+    def test_live_cdr_tou_requires_three_verified_bands(self) -> None:
+        collector = OfferCollector()
+        bands = [
+            {"rateType": name, "rates": [{"unitPrice": value}]}
+            for name, value in (
+                ("PEAK", "0.42"), ("SHOULDER", "0.31"), ("OFF_PEAK", "0.18"))
+        ]
+        plan = {
+            "planId": "tou-1", "customerType": "RESIDENTIAL",
+            "fuelType": "ELECTRICITY",
+            "geography": {"distributors": ["Ausgrid"], "states": ["NSW"]},
+            "electricityContract": {"tariffPeriod": [{
+                "dailySupplyCharges": "1.00", "timeOfUseRates": bands
+            }]},
+        }
+        offer = collector._normalise_cdr_plan_metadata(plan, "https://example.com")
+        self.assertIsNotNone(offer)
+        self.assertEqual(offer.peak_rate_cents_kwh, Decimal("42.00"))
+        plan["electricityContract"]["tariffPeriod"][0]["timeOfUseRates"] = bands[:2]
+        self.assertIsNone(collector._normalise_cdr_plan_metadata(plan, "https://example.com"))
+
+    def test_live_cdr_eligibility_is_fail_closed(self) -> None:
+        collector = OfferCollector()
+        plan = {
+            "planId": "restricted", "customerType": "RESIDENTIAL",
+            "fuelType": "GAS", "eligibility": [{"type": "CONCESSION"}],
+            "geography": {"distributors": ["Jemena"], "states": ["NSW"]},
+            "gasContract": {"tariffPeriod": [{
+                "dailySupplyCharges": "0.75",
+                "singleRate": {"rates": [{"unitPrice": "0.04"}]}
+            }]},
+        }
+        self.assertIsNone(collector._normalise_cdr_plan_metadata(plan, "https://example.com"))
 
     def test_coverage_report_does_not_claim_market_completeness(self) -> None:
         collector = OfferCollector()
