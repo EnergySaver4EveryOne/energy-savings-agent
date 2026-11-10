@@ -121,3 +121,22 @@ No claim of full NSW market coverage or guaranteed cheapest plan is warranted.
 
 The automated integration test refreshes timestamps **only in a temporary test
 fixture**, not in production offer data. This keeps the stale-offer policy intact.
+
+
+## Phase 2 experimental collector
+
+The Streamlit app now exposes an **opt-in experimental live CDR** checkbox.
+The analysis result carries a collection report with source attempts, failures,
+and accepted/rejected counts. Public Energy Made Easy reference data is probed
+for explicitly published retailer slugs; the fixed registry is the fallback.
+This is not proof that all active retailers are discovered.
+
+The normaliser supports only narrowly shaped gas single-rate (AUD/MJ) and
+electricity single-rate or three-band TOU payloads. It rejects unknown
+eligibility restrictions and unsupported pricing structures instead of
+guessing. TOU time-window compatibility, postcode-specific availability,
+meter type, taxes, seasonal pricing, tiered gas tariffs and live retailer
+schemas are **not comprehensively validated**. Users must verify all
+results against the official retailer offer before switching. No
+market-wide cheapest-plan guarantee is made. Network matching is a
+necessary but insufficient eligibility condition.
