@@ -71,6 +71,8 @@ class MarketCoverageReport:
     plans_rejected: int = 0
     curated_count: int = 0
     live_requested: bool = False
+    registry_source: str = "static fallback"
+    discovered_retailers: int = 0
 
     @property
     def market_complete(self) -> bool:
@@ -88,6 +90,34 @@ class OfferCollector:
         self.offers_path = Path(offers_path) if offers_path else DEFAULT_OFFERS_PATH
         self.max_stale_days = max_stale_days
         self.last_coverage_report = MarketCoverageReport()
+
+    def discover_retailer_slugs(self, timeout_sec: float = 5.0) -> List[str]:
+        """Read public reference data; fall back to known slugs if unavailable.
+
+        Reference data does not guarantee a CDR plan endpoint for each organisation.
+        """
+        req = urllib.request.Request(
+            EME_REFDATA_URL, headers={"Accept": "application/json",
+                                      "User-Agent": "EnergySavingsAgent/0.2"})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout_sec) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            # Only explicitly advertised slugs are usable, not guessed company names.
+            organisations = payload.get("organisations", []) if isinstance(payload, dict) else []
+            if isinstance(organisations, dict):
+                organisations = organisations.get("data", [])
+            slugs = {
+                item["slug"].lower() for item in organisations
+                if isinstance(item, dict) and isinstance(item.get("slug"), str)
+                and item["slug"].lower().replace("-", "").isalnum()
+            }
+            if slugs:
+                self.last_coverage_report.registry_source = "EME reference data"
+                return sorted(slugs)
+        except (OSError, ValueError, TypeError, KeyError):
+            pass
+        self.last_coverage_report.registry_source = "static fallback"
+        return list(AUSTRALIAN_CDR_RETAILER_SLUGS)
 
     def load_curated_offers(
         self,
@@ -124,7 +154,9 @@ class OfferCollector:
         )
         self.last_coverage_report = report
         if include_live_cdr:
-            for retailer_key in AUSTRALIAN_CDR_RETAILER_SLUGS:
+            retailer_slugs = self.discover_retailer_slugs()
+            report.discovered_retailers = len(retailer_slugs)
+            for retailer_key in retailer_slugs:
                 for fuel in ("ELECTRICITY", "GAS"):
                     source = f"{retailer_key}:{fuel}"
                     report.sources_attempted.append(source)
@@ -213,7 +245,9 @@ class OfferCollector:
         slug = retailer_key.lower()
         base_url = AUSTRALIAN_CDR_RETAILER_ENDPOINTS.get(slug)
         if not base_url:
-            return []
+            if not slug.replace('-', '').isalnum():
+                raise ValueError('Invalid retailer slug')
+            base_url = f'{CDR_PRD_BASE_URL}/{slug}/cds-au/v1/energy/plans'
 
         if fuel_type not in ("ELECTRICITY", "GAS"):
             raise ValueError("Invalid fuel type")
@@ -265,7 +299,7 @@ class OfferCollector:
         `GET https://cdr.energymadeeasy.gov.au/<retailer>/cds-au/v3/energy/plans/{planId}`
         Requires Consumer Data Standards headers `x-v: 3` and `x-min-v: 1`.
         """
-        url = f"{CDR_PRD_BASE_URL}/{retailer_slug.lower()}/cds-au/v3/energy/plans/{plan_id}"
+        url = f"{CDR_PRD_BASE_URL}/{retailer_slug.lower()}/cds-au/v3/energy/plans/{urllib.parse.quote(plan_id, safe='')}"
         req = urllib.request.Request(
             url,
             headers={
@@ -298,27 +332,93 @@ class OfferCollector:
             return None
         distributor = distributors[0]
         fuel_str = plan_json.get("fuelType")
-        # The current pricing model cannot safely price live gas or complex tariffs.
-        if fuel_str != "ELECTRICITY":
+        if fuel_str not in ("ELECTRICITY", "GAS"):
             return None
-        contract = plan_json.get("electricityContract") or {}
-        tariff_periods = contract.get("tariffPeriod") or []
-        if len(tariff_periods) != 1:
+        if not plan_json.get("planId"):
             return None
-        period = tariff_periods[0]
-        if any(key in period for key in ("timeOfUseRates", "demandCharges",
-                                        "controlledLoad", "blockRates")):
+        # Do not guess rates for concessions, eligibility restrictions, or discounts.
+        if plan_json.get("eligibility") or plan_json.get("discounts"):
             return None
-        rates = (period.get("singleRate") or {}).get("rates") or []
+        contract = plan_json.get(
+            "electricityContract" if fuel_str == "ELECTRICITY" else "gasContract"
+        ) or {}
+        periods = contract.get("tariffPeriod") or []
+        if len(periods) != 1:
+            return None
+        period = periods[0]
+        if any(key in period for key in ("demandCharges", "controlledLoad",
+                                        "blockRates", "solarFeedInTariff")):
+            return None
         supply = period.get("dailySupplyCharges")
-        if supply is None or len(rates) != 1 or rates[0].get("unitPrice") is None:
+        if supply is None:
             return None
         try:
             supply_cents = to_decimal(supply) * Decimal("100")
+            if not supply_cents.is_finite() or supply_cents < 0:
+                return None
+            if fuel_str == "GAS":
+                if period.get("timeOfUseRates"):
+                    return None
+                rates = (period.get("singleRate") or {}).get("rates") or []
+                if len(rates) != 1 or rates[0].get("unitPrice") is None:
+                    return None
+                gas_rate = to_decimal(rates[0]["unitPrice"]) * Decimal("100")
+                if not gas_rate.is_finite() or gas_rate < 0:
+                    return None
+                return EnergyOffer(
+                    offer_id=str(plan_json["planId"]),
+                    retailer=str(plan_json.get("brandName") or "Unknown retailer"),
+                    plan_name=str(plan_json.get("displayName") or "Market Plan"),
+                    fuel_type=FuelType.GAS, tariff_type=TariffType.SINGLE_RATE,
+                    distributor=distributor, state="NSW",
+                    daily_supply_charge_cents=supply_cents,
+                    gas_block1_rate_cents_mj=gas_rate,
+                    source_url=source_url,
+                    retrieved_at=datetime.now(timezone.utc).isoformat(),
+                    eligibility=EligibilityRule(
+                        notes="Live CDR gas: verify MJ unit and postcode eligibility before switching"),
+                )
+            if period.get("timeOfUseRates"):
+                # A TOU rate is only usable if explicit peak/shoulder/off-peak
+                # labels are supplied; time windows still require user validation.
+                bands = period["timeOfUseRates"]
+                if not isinstance(bands, list) or len(bands) != 3:
+                    return None
+                by_band = {}
+                for band in bands:
+                    name = str(band.get("rateType", "")).upper().replace("-", "_")
+                    if name not in ("PEAK", "SHOULDER", "OFF_PEAK"):
+                        return None
+                    rates = band.get("rates") or []
+                    if len(rates) != 1 or rates[0].get("unitPrice") is None:
+                        return None
+                    by_band[name] = to_decimal(rates[0]["unitPrice"]) * Decimal("100")
+                if len(by_band) != 3 or any(
+                    not v.is_finite() or v < 0 for v in by_band.values()
+                ):
+                    return None
+                return EnergyOffer(
+                    offer_id=str(plan_json["planId"]),
+                    retailer=str(plan_json.get("brandName") or "Unknown retailer"),
+                    plan_name=str(plan_json.get("displayName") or "Market Plan"),
+                    fuel_type=FuelType.ELECTRICITY, tariff_type=TariffType.TIME_OF_USE,
+                    distributor=distributor, state="NSW",
+                    daily_supply_charge_cents=supply_cents,
+                    peak_rate_cents_kwh=by_band["PEAK"],
+                    shoulder_rate_cents_kwh=by_band["SHOULDER"],
+                    off_peak_rate_cents_kwh=by_band["OFF_PEAK"],
+                    source_url=source_url,
+                    retrieved_at=datetime.now(timezone.utc).isoformat(),
+                    eligibility=EligibilityRule(
+                        notes="Live CDR TOU: verify time windows, meter and postcode eligibility"),
+                )
+            rates = (period.get("singleRate") or {}).get("rates") or []
+            if len(rates) != 1 or rates[0].get("unitPrice") is None:
+                return None
             single_rate_cents = to_decimal(rates[0]["unitPrice"]) * Decimal("100")
-        except (ValueError, TypeError, ArithmeticError):
-            return None
-        if supply_cents < 0 or single_rate_cents < 0 or not plan_json.get("planId"):
+            if not single_rate_cents.is_finite() or single_rate_cents < 0:
+                return None
+        except (ValueError, TypeError, ArithmeticError, KeyError, AttributeError):
             return None
 
         return EnergyOffer(

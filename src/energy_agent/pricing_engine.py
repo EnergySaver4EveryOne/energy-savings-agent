@@ -316,6 +316,15 @@ class PricingEngine:
         if not profile.electricity_usage:
             raise ValueError("HouseholdProfile has no electricity_usage data.")
 
+        if "Live CDR" in offer.eligibility.notes:
+            if offer.tariff_type == TariffType.SINGLE_RATE and offer.single_rate_cents_kwh is None:
+                raise ValueError("Live CDR electricity offer lacks a verified single rate")
+            if offer.tariff_type == TariffType.TIME_OF_USE and any(
+                rate is None for rate in (
+                    offer.peak_rate_cents_kwh, offer.shoulder_rate_cents_kwh,
+                    offer.off_peak_rate_cents_kwh)
+            ):
+                raise ValueError("Live CDR TOU offer lacks verified band rates")
         usage = profile.electricity_usage
         factor = usage.annualization_factor
         assumptions: List[str] = []
@@ -536,6 +545,8 @@ class PricingEngine:
         if not profile.gas_usage:
             raise ValueError("HouseholdProfile has no gas_usage data.")
 
+        if "Live CDR" in offer.eligibility.notes and offer.gas_block1_rate_cents_mj is None:
+            raise ValueError("Live CDR gas offer lacks verified MJ rate")
         usage = profile.gas_usage
         assumptions: List[str] = []
         warning_flags: List[str] = []
