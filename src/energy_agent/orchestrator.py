@@ -29,7 +29,7 @@ from .models import (
     OfferComparison,
 )
 from .monitor import MarketCheckSummary, MarketMonitor
-from .offer_collector import OfferCollector
+from .offer_collector import OfferCollector, MarketCoverageReport
 from .pricing_engine import PricingEngine
 from .storage import StorageRepository
 
@@ -42,6 +42,7 @@ class AnalysisResult:
     electricity_comparisons: List[OfferComparison]
     gas_comparisons: List[OfferComparison]
     dual_fuel_comparison: Optional[DualFuelComparison]
+    market_coverage: Optional[MarketCoverageReport] = None
 
 
 class EnergySavingsOrchestrator:
@@ -73,6 +74,7 @@ class EnergySavingsOrchestrator:
         household_id: Optional[str] = None,
         rank_by_recurring: bool = False,
         persist: bool = True,
+        include_live_cdr: bool = False,
     ) -> AnalysisResult:
         """Parse a PDF energy bill, validate profile, discover offers, and rank savings."""
         profile = self.bill_parser.parse_pdf_bill(
@@ -82,6 +84,7 @@ class EnergySavingsOrchestrator:
             profile=profile,
             rank_by_recurring=rank_by_recurring,
             persist=persist,
+            include_live_cdr=include_live_cdr,
         )
 
     def analyze_profile(
@@ -92,7 +95,9 @@ class EnergySavingsOrchestrator:
     ) -> AnalysisResult:
         """Run full validation, offer discovery, pricing, and explanation for a HouseholdProfile."""
         self.bill_parser.validate_profile(profile)
-        offers = self.collector.discover_offers_for_profile(profile)
+        offers = self.collector.discover_offers_for_profile(
+            profile, include_live_cdr=include_live_cdr
+        )
 
         elec_comparisons: List[OfferComparison] = []
         gas_comparisons: List[OfferComparison] = []
@@ -143,6 +148,7 @@ class EnergySavingsOrchestrator:
             electricity_comparisons=elec_comparisons,
             gas_comparisons=gas_comparisons,
             dual_fuel_comparison=dual_fuel,
+            market_coverage=self.collector.last_coverage_report,
         )
 
     def run_daily_monitoring(self) -> MarketCheckSummary:
