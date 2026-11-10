@@ -83,6 +83,11 @@ with tab_upload:
             "Rank strictly by Ongoing Recurring Cost (exclude one-off Year-1 sign-up credits from rank order)",
             value=False,
         )
+        include_live_cdr = st.checkbox(
+            "Experimental live CDR offers (slow; incomplete coverage)",
+            value=False,
+            help="Queries public plan APIs. Rates and eligibility require verification before switching.",
+        )
         alert_threshold = st.number_input(
             "Savings Alert Threshold (AUD $/yr)",
             min_value=10.0,
@@ -97,7 +102,21 @@ with tab_upload:
                 pdf_path=selected_pdf_path,
                 rank_by_recurring=rank_mode,
                 persist=True,
+                include_live_cdr=include_live_cdr,
             )
+            coverage = result.market_coverage
+            if coverage:
+                st.info(
+                    f"Market coverage is not complete. Live requested: {coverage.live_requested}; "
+                    f"registry: {coverage.registry_source}; "
+                    f"sources attempted: {len(coverage.sources_attempted)}; "
+                    f"plans seen: {coverage.plans_seen}; accepted: {coverage.plans_accepted}; "
+                    f"rejected: {coverage.plans_rejected}; failed sources: {len(coverage.failures)}. "
+                    "Verify prices, meter configuration and postcode eligibility before switching."
+                )
+                if coverage.failures:
+                    with st.expander("CDR source failures"):
+                        st.json(coverage.failures)
             profile = result.profile
             profile.alert_threshold_aud = Decimal(str(alert_threshold))
             orchestrator.storage.save_household_profile(profile)
