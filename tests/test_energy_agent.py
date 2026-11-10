@@ -10,6 +10,8 @@ Compatible with both `pytest` and standard library `python3 -m unittest`.
 from __future__ import annotations
 
 import tempfile
+import json
+from unittest.mock import patch
 import unittest
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -263,6 +265,35 @@ class TestEnergySavingsAgent(unittest.TestCase):
         self.assertEqual(len(fresh_offer.promotions), 1)
         self.assertEqual(fresh_offer.promotions[0].title, "Active Promo")
 
+    def test_live_cdr_rejects_missing_or_complex_prices(self) -> None:
+        collector = OfferCollector()
+        base = {
+            "planId": "verified-1", "brandName": "Example", "displayName": "Example",
+            "customerType": "RESIDENTIAL", "fuelType": "ELECTRICITY",
+            "geography": {"distributors": ["Ausgrid"], "states": ["NSW"]},
+            "electricityContract": {"tariffPeriod": [{
+                "dailySupplyCharges": "1.05",
+                "singleRate": {"rates": [{"unitPrice": "0.30"}]}
+            }]},
+        }
+        self.assertEqual(
+            collector._normalise_cdr_plan_metadata(base, "https://example.com")
+            .single_rate_cents_kwh, Decimal("30.00")
+        )
+        missing = json.loads(json.dumps(base))
+        del missing["electricityContract"]["tariffPeriod"][0]["singleRate"]
+        self.assertIsNone(collector._normalise_cdr_plan_metadata(missing, "https://example.com"))
+        complex_plan = json.loads(json.dumps(base))
+        complex_plan["electricityContract"]["tariffPeriod"][0]["timeOfUseRates"] = []
+        self.assertIsNone(collector._normalise_cdr_plan_metadata(complex_plan, "https://example.com"))
+        gas = dict(base, fuelType="GAS")
+        self.assertIsNone(collector._normalise_cdr_plan_metadata(gas, "https://example.com"))
+
+    def test_coverage_report_does_not_claim_market_completeness(self) -> None:
+        collector = OfferCollector()
+        self.assertFalse(collector.last_coverage_report.market_complete)
+        self.assertEqual(collector.last_coverage_report.plans_seen, 0)
+
     def test_fr07_fr08_fr09_fr10_orchestrator_and_alert_deduplication(self) -> None:
         """
         FR-07, FR-08, FR-09, FR-10:
@@ -273,6 +304,15 @@ class TestEnergySavingsAgent(unittest.TestCase):
         orchestrator = EnergySavingsOrchestrator(
             db_path=self.db_path, use_llm=False
         )
+
+        # Fixture timestamps are fixed relative to test execution, not to
+        # the historical date when the sample market dataset was created.
+        fixture = json.loads(OfferCollector().offers_path.read_text(encoding="utf-8"))
+        for offer in fixture:
+            offer["retrieved_at"] = datetime.now(timezone.utc).isoformat()
+        fixture_path = self.base_path / "fresh_offers.json"
+        fixture_path.write_text(json.dumps(fixture), encoding="utf-8")
+        orchestrator.collector.offers_path = fixture_path
 
         result = orchestrator.analyze_pdf_bill(
             sample_bills["dual_fuel_elec_gas"],

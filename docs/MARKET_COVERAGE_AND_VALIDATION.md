@@ -98,3 +98,26 @@ Use explicit states such as `complete_within_defined_scope`, `partial`, `unknown
 ## External verification required before production
 
 Verify current AER/Consumer Data Standards endpoints, schema versions, source roster, coverage rules, product eligibility requirements, Energy Made Easy comparison disclosures and relevant consumer-protection obligations from primary official sources. Existing business-analysis market statistics and regulatory assertions should be treated as research claims until independently rechecked and dated.
+
+
+## Implementation status — reliability and coverage branch (November 2026)
+
+The collector now attempts both electricity and gas for each of the 13 configured
+CDR retailer slugs when `include_live_cdr=True`. It follows CDR `links.next`
+pagination, enforces a page limit and rejects cross-host pagination links.
+Failures are retained in `collector.last_coverage_report.failures` rather than
+being silently interpreted as zero offers. The report includes attempted sources,
+seen, accepted and rejected plan counts, and whether live collection was requested.
+
+**Important limitations:** The registry is not dynamically discovered, and no
+complete-market claim is possible. Live gas plans are deliberately rejected
+until a verified MJ-based gas tariff normaliser is implemented. Electricity
+offers with missing prices, unverified NSW/distributor geography, or unsupported
+complex tariff structures are rejected instead of using invented fallback rates.
+The live normaliser currently supports only a narrow, verified single-rate shape;
+many valid CDR tariffs will remain unpriced. Collection remains opt-in and the
+default application still uses curated data with a 14-day freshness policy.
+No claim of full NSW market coverage or guaranteed cheapest plan is warranted.
+
+The automated integration test refreshes timestamps **only in a temporary test
+fixture**, not in production offer data. This keeps the stale-offer policy intact.
