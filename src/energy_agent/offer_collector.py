@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 import urllib.request
+import urllib.parse
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -59,6 +61,22 @@ DEFAULT_OFFERS_PATH = (
 )
 
 
+@dataclass
+class MarketCoverageReport:
+    """Evidence of collection; not a claim of complete market coverage."""
+    sources_attempted: List[str] = field(default_factory=list)
+    failures: Dict[str, str] = field(default_factory=dict)
+    plans_seen: int = 0
+    plans_accepted: int = 0
+    plans_rejected: int = 0
+    curated_count: int = 0
+    live_requested: bool = False
+
+    @property
+    def market_complete(self) -> bool:
+        return False  # Curated registry cannot establish complete market coverage.
+
+
 class OfferCollector:
     """Collects, normalises, and validates energy offers from CDR APIs and local datasets."""
 
@@ -69,6 +87,7 @@ class OfferCollector:
     ) -> None:
         self.offers_path = Path(offers_path) if offers_path else DEFAULT_OFFERS_PATH
         self.max_stale_days = max_stale_days
+        self.last_coverage_report = MarketCoverageReport()
 
     def load_curated_offers(
         self,
@@ -100,11 +119,31 @@ class OfferCollector:
         Discover all market offers matching the household's state and distribution networks (UC-02).
         """
         all_offers = self.load_curated_offers(exclude_stale=exclude_stale)
-
+        report = MarketCoverageReport(
+            curated_count=len(all_offers), live_requested=include_live_cdr
+        )
+        self.last_coverage_report = report
         if include_live_cdr:
-            for retailer_key in ("agl", "origin", "redenergy", "ovoenergy", "globird"):
-                live = self.fetch_cdr_plans_summary(retailer_key)
-                all_offers.extend(live)
+            for retailer_key in AUSTRALIAN_CDR_RETAILER_SLUGS:
+                for fuel in ("ELECTRICITY", "GAS"):
+                    source = f"{retailer_key}:{fuel}"
+                    report.sources_attempted.append(source)
+                    try:
+                        all_offers.extend(
+                            self.fetch_cdr_plans_summary(retailer_key, fuel_type=fuel)
+                        )
+                    except Exception as exc:
+                        report.failures[source] = str(exc)
+
+        # Deduplicate records by plan, fuel, retailer and network.
+        unique = {}
+        for offer in all_offers:
+            key = (offer.retailer.casefold(), offer.offer_id,
+                   offer.fuel_type.value, offer.distributor.casefold())
+            previous = unique.get(key)
+            if previous is None or offer.retrieved_at > previous.retrieved_at:
+                unique[key] = offer
+        all_offers = list(unique.values())
 
         matching: List[EnergyOffer] = []
         for offer in all_offers:
@@ -176,36 +215,44 @@ class OfferCollector:
         if not base_url:
             return []
 
-        url = f"{base_url}?type=MARKET&fuelType={fuel_type}&page-size=10"
-        req = urllib.request.Request(
-            url,
-            headers={
-                "x-v": "1",
-                "x-min-v": "1",
-                "Accept": "application/json",
-                "User-Agent": "EnergySavingsAgent/0.1 (NSW Residential Comparison)",
-            },
-        )
-        try:
+        if fuel_type not in ("ELECTRICITY", "GAS"):
+            raise ValueError("Invalid fuel type")
+        url = f"{base_url}?type=MARKET&fuelType={fuel_type}&page-size=100"
+        visited = set()
+        normalised = []
+        report = self.last_coverage_report
+        while url:
+            if url in visited or len(visited) >= 100:
+                raise RuntimeError("CDR pagination cycle or limit")
+            visited.add(url)
+            req = urllib.request.Request(url, headers={
+                "x-v": "1", "x-min-v": "1", "Accept": "application/json",
+                "User-Agent": "EnergySavingsAgent/0.1",
+            })
             with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
                 payload = json.loads(resp.read().decode("utf-8"))
-            plans = payload.get("data", {}).get("plans", [])
-            normalised: List[EnergyOffer] = []
+            plans = payload.get("data", {}).get("plans")
+            if not isinstance(plans, list):
+                raise ValueError("Invalid CDR plans response")
             for plan in plans:
+                report.plans_seen += 1
                 plan_id = plan.get("planId")
-                detail = (
-                    self.fetch_cdr_plan_detail_v3(slug, str(plan_id), timeout_sec)
-                    if plan_id
-                    else None
-                )
-                offer = self._normalise_cdr_plan_metadata(
-                    detail or plan, base_url
-                )
-                if offer:
+                detail = (self.fetch_cdr_plan_detail_v3(slug, str(plan_id), timeout_sec)
+                          if plan_id else None)
+                offer = (self._normalise_cdr_plan_metadata(detail, base_url)
+                         if detail else None)
+                if offer is None:
+                    report.plans_rejected += 1
+                else:
+                    report.plans_accepted += 1
                     normalised.append(offer)
-            return normalised
-        except Exception:
-            return []
+            next_url = payload.get("links", {}).get("next")
+            if next_url:
+                next_url = urllib.parse.urljoin(url, next_url)
+                if urllib.parse.urlparse(next_url).netloc != urllib.parse.urlparse(base_url).netloc:
+                    raise ValueError("Cross-host CDR pagination rejected")
+            url = next_url
+        return normalised
 
     def fetch_cdr_plan_detail_v3(
         self,
@@ -244,30 +291,38 @@ class OfferCollector:
         if plan_json.get("customerType") not in (None, "RESIDENTIAL"):
             return None
 
-        geography = plan_json.get("geography", {})
-        distributors = geography.get("distributors", ["Ausgrid"])
-        distributor = distributors[0] if distributors else "Ausgrid"
-        fuel_str = plan_json.get("fuelType", "ELECTRICITY")
-        if fuel_str not in ("ELECTRICITY", "GAS"):
+        geography = plan_json.get("geography") or {}
+        distributors = geography.get("distributors") or []
+        states = geography.get("states") or []
+        if len(distributors) != 1 or states != ["NSW"]:
+            return None
+        distributor = distributors[0]
+        fuel_str = plan_json.get("fuelType")
+        # The current pricing model cannot safely price live gas or complex tariffs.
+        if fuel_str != "ELECTRICITY":
+            return None
+        contract = plan_json.get("electricityContract") or {}
+        tariff_periods = contract.get("tariffPeriod") or []
+        if len(tariff_periods) != 1:
+            return None
+        period = tariff_periods[0]
+        if any(key in period for key in ("timeOfUseRates", "demandCharges",
+                                        "controlledLoad", "blockRates")):
+            return None
+        rates = (period.get("singleRate") or {}).get("rates") or []
+        supply = period.get("dailySupplyCharges")
+        if supply is None or len(rates) != 1 or rates[0].get("unitPrice") is None:
+            return None
+        try:
+            supply_cents = to_decimal(supply) * Decimal("100")
+            single_rate_cents = to_decimal(rates[0]["unitPrice"]) * Decimal("100")
+        except (ValueError, TypeError, ArithmeticError):
+            return None
+        if supply_cents < 0 or single_rate_cents < 0 or not plan_json.get("planId"):
             return None
 
-        # Extract v3 electricityContract rates if present
-        contract = plan_json.get("electricityContract") or plan_json.get("gasContract") or {}
-        tariff_periods = contract.get("tariffPeriod", [])
-        supply_cents = Decimal("105.00")
-        single_rate_cents = Decimal("30.00")
-
-        if tariff_periods and isinstance(tariff_periods, list):
-            first_period = tariff_periods[0]
-            if first_period.get("dailySupplyCharges"):
-                # CDR stores dollars (e.g. "1.05"), convert to cents
-                supply_cents = to_decimal(first_period["dailySupplyCharges"]) * Decimal("100")
-            single_rates = first_period.get("singleRate", {}).get("rates", [])
-            if single_rates and single_rates[0].get("unitPrice"):
-                single_rate_cents = to_decimal(single_rates[0]["unitPrice"]) * Decimal("100")
-
         return EnergyOffer(
-            offer_id=str(plan_json.get("planId", "CDR-PLAN")),
+            offer_id=str(plan_json["planId"]),
             retailer=str(plan_json.get("brandName", "CDR Retailer")),
             plan_name=str(plan_json.get("displayName", "Market Plan")),
             fuel_type=FuelType(fuel_str),
